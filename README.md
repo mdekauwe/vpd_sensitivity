@@ -2,7 +2,7 @@
 
 ## Overview ##
 
-# Estimate leaf VPD from the eddy covariance measurements:
+Estimate leaf VPD from the eddy covariance measurements:
 
 Invert ecosystem conductance (Gs) from the eddy covariance data and use this to estimate the (big) leaf VPD_leaf (eqn 10a, Monteith, 1965; eqn 3, Lin et al. 2018)
 
