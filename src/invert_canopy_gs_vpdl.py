@@ -83,7 +83,7 @@ def main(site_metadata_fname, hour=False):
                                          df['Tair'], df['Psurf'], df['ET'],
                                          ustar=df["ustar"], G=G)
 
-        # screen for bad data, or data I've set to bad
+        # screen for bad data
         df = df[(df['Gs'] > 0.0) & (np.isnan(df['Gs']) == False)]
 
         VPDa = df['VPD'] * c.PA_TO_KPA
