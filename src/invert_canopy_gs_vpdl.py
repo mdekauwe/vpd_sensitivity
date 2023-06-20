@@ -78,10 +78,13 @@ def main(site_metadata_fname, hour=False):
             G = None
 
         PM = PenmanMonteith(use_ustar=True)
-        (df['Gc'],
+        (df['Gs'],
          df['VPDl'])  = PM.invert_penman(df['VPD'], df['Wind'], df['Rnet'],
                                          df['Tair'], df['Psurf'], df['ET'],
                                          ustar=df["ustar"], G=G)
+
+        # screen for bad data, or data I've set to bad
+        df = df[(df['Gs'] > 0.0) & (np.isnan(df['Gs']) == False)]
 
         VPDa = df['VPD'] * c.PA_TO_KPA
         VPDl = df['VPDl'] * c.PA_TO_KPA
@@ -115,9 +118,9 @@ def plot_vpd(VPDa, VPDl, site_name):
     r, pval = pearsonr(VPDa, VPDl)
     #print(r, pval)
     if pval <= 0.05:
-        m,b = np.polyfit(VPDa, VPDl, 1)
-        ax.plot(VPDa, VPDa*m+b, ls="-", c="red")
-        
+        m,c = np.polyfit(VPDa, VPDl, 1)
+        ax.plot(VPDa, VPDa*m+c, ls="-", c="red")
+
 
     ax.set_ylim(0, 6)
     ax.set_xlim(0, 6)
@@ -125,7 +128,7 @@ def plot_vpd(VPDa, VPDl, site_name):
     ax.set_ylabel("VPD$_l$ (kPa)")
 
     ax.text(3.5, 0.5, 'R$^{2}$ = %0.2f' % r**2)
-    ax.text(3.5, 0.25, 'm = %0.2f; b = %0.2f' % (m, b))
+    ax.text(3.5, 0.25, 'm = %0.2f; c = %0.2f' % (m, c))
 
     odir = "plots"
     ofname = "%s.pdf" % (site_name)
