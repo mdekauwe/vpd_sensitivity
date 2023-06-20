@@ -329,6 +329,7 @@ class PenmanMonteith(object):
         # zero plan displacement height [m]
         d = self.displace_ratio * canht
 
+        
         arg1 = self.VK**2 * wind
         arg2 = log((canht - d) / z0m)
         arg3 = log((canht - d) / z0h)
