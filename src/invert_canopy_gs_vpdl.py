@@ -77,6 +77,7 @@ def main(site_metadata_fname, hour=False):
         else:
             G = None
 
+
         PM = PenmanMonteith(use_ustar=True)
         (df['Gs'],
          df['VPDl'])  = PM.invert_penman(df['VPD'], df['Wind'], df['Rnet'],
@@ -91,7 +92,6 @@ def main(site_metadata_fname, hour=False):
 
         plot_vpd(VPDa, VPDl, site_name)
 
-        print(df)
 
 def plot_vpd(VPDa, VPDl, site_name):
 

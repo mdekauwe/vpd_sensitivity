@@ -37,14 +37,40 @@ def main(fname, hour=False):
 
     site_name = "Alice_Holt"
 
-
     date_parse = lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S')
-
     df = pd.read_csv(fname, index_col='DateTime',
                      parse_dates=['DateTime'],
                      date_parser=date_parse)
     df.index.names = ['date']
 
+    df = df.resample("D").agg("mean")
+
+    """
+    fig, ax1 = plt.subplots()
+
+    ax1.plot(df.VPD, "k-")
+    ax1.set_ylabel("VPD (kPa)")
+    ax2 = ax1.twinx()
+    ax2.plot(df.RH, "g-", alpha=0.8)
+    ax2.set_ylim(0, 100)
+    ax2.set_ylabel("RH (%)")
+
+    plt.show()
+
+    vpd = df.VPD
+    vpd_mean = vpd.groupby(lambda x: (x.month, x.day)).mean().values
+    vpd_max = vpd.groupby(lambda x: (x.month, x.day)).max().values
+    vpd_min = vpd.groupby(lambda x: (x.month, x.day)).min().values
+    fig, ax1 = plt.subplots()
+
+    ax1.plot(vpd_mean, ls="-", color="darkgreen")
+    ax1.fill_between(np.arange(len(vpd_min)), vpd_min, vpd_max, color="green", alpha=.5)
+    ax1.set_ylabel("VPD (kPa)")
+
+
+    plt.show()
+    sys.exit()
+    """
 
     # Convert units ...
 
@@ -70,16 +96,14 @@ def main(fname, hour=False):
 
     PM = PenmanMonteith(use_ustar=False)
 
-    # some issue with the wind array that needs checking, one element is a str
-    wind = df['Wind'].values.astype(float)
-
     # Height from Wilkinson, M., Eaton, E. L., Broadmeadow, M. S. J., and
     # Morison, J. I. L.: Inter-annual variation of carbon uptake by a
     # plantation oak woodland in south-eastern England, Biogeosciences, 9,
     # 5373–5389, https://doi.org/10.5194/bg-9-5373-2012, 2012.
     (df['Gs'],
-     df['VPDl'])  = PM.invert_penman(df['VPD'].values, wind, df['Rnet'].values,
-                                     df['Tair'].values, df['Psurf'].values,
+     df['VPDl'])  = PM.invert_penman(df['VPD'].values, df['Wind'].values,
+                                     df['Rnet'].values, df['Tair'].values,
+                                     df['Psurf'].values,
                                      df['ET'].values, canht=28., G=G)
 
     # screen for bad data
@@ -225,6 +249,7 @@ def read_file(fname):
 
     # Convert units ...
 
+
     # hPa -> Pa
     df.loc[:, 'VPD'] *= c.HPA_TO_KPA * c.KPA_TO_PA
 
@@ -307,7 +332,7 @@ def filter_dataframe(df, hour):
 
     # There will be duplicate dates most likely so remove these.
     bad_dates = np.unique(bad_dates)
-    print(bad_dates)
+
     # remove rain days...
     df = df[~df.index.isin(bad_dates)]
 
