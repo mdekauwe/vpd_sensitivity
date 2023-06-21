@@ -68,12 +68,6 @@ def main(fname, hour=False):
     if no_G:
         G = None
 
-    df = df.replace('NaN', np.nan)
-    df = df.replace('nan', np.nan)
-    df = df.replace('#na', np.nan)
-    df = df.dropna()
-
-
     PM = PenmanMonteith(use_ustar=False)
 
     # some issue with the wind array that needs checking, one element is a str
