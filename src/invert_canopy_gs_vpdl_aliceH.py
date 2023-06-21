@@ -71,7 +71,7 @@ def main(fname, hour=False):
     PM = PenmanMonteith(use_ustar=False)
 
     # some issue with the wind array that needs checking, one element is a str
-    wind = df['wind_speed'].values.astype(float)
+    wind = df['Wind'].values.astype(float)
 
     # Height from Wilkinson, M., Eaton, E. L., Broadmeadow, M. S. J., and
     # Morison, J. I. L.: Inter-annual variation of carbon uptake by a
@@ -90,7 +90,6 @@ def main(fname, hour=False):
 
     plot_vpd(VPDa, VPDl, site_name)
 
-    print(df)
 
 def plot_vpd(VPDa, VPDl, site_name):
 
@@ -281,6 +280,36 @@ def filter_dataframe(df, hour):
             (df.index.hour <= 18) &
             (df['ET'] > 0.01 / 1000.) & # check in mmol, but units are mol
             (df['VPD'] > 0.05)]
+
+    # Filter events after rain ...
+    idx = df[df.Rainf > 0.0].index.tolist()
+
+    if hour:
+        # hour gap i.e. Tumba
+        bad_dates = []
+        for rain_idx in idx:
+            bad_dates.append(rain_idx)
+            for i in range(24):
+                new_idx = rain_idx + dt.timedelta(minutes=60)
+                bad_dates.append(new_idx)
+                rain_idx = new_idx
+    else:
+
+
+        # 30 min gap
+        bad_dates = []
+        for rain_idx in idx:
+            bad_dates.append(rain_idx)
+            for i in range(48):
+                new_idx = rain_idx + dt.timedelta(minutes=30)
+                bad_dates.append(new_idx)
+                rain_idx = new_idx
+
+    # There will be duplicate dates most likely so remove these.
+    bad_dates = np.unique(bad_dates)
+    print(bad_dates)
+    # remove rain days...
+    df = df[~df.index.isin(bad_dates)]
 
     return (df, no_G)
 
