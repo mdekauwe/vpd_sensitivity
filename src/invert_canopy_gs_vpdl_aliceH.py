@@ -79,10 +79,14 @@ def main(fname, hour=False):
     # some issue with the wind array that needs checking, one element is a str
     wind = df['wind_speed'].values.astype(float)
 
+    # Height from Wilkinson, M., Eaton, E. L., Broadmeadow, M. S. J., and
+    # Morison, J. I. L.: Inter-annual variation of carbon uptake by a
+    # plantation oak woodland in south-eastern England, Biogeosciences, 9,
+    # 5373–5389, https://doi.org/10.5194/bg-9-5373-2012, 2012.
     (df['Gs'],
-     df['VPDl'])  = PM.invert_penman(df['VPD'].values, wind, df['Rg'].values,
-                                     df['Tair'].values, df['Psurf'].values, df['ET'].values,
-                                     canht=30., G=G)
+     df['VPDl'])  = PM.invert_penman(df['VPD'].values, wind, df['Rnet'].values,
+                                     df['Tair'].values, df['Psurf'].values,
+                                     df['ET'].values, canht=28., G=G)
 
     # screen for bad data
     df = df[(df['Gs'] > 0.0) & (np.isnan(df['Gs']) == False)]
