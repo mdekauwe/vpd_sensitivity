@@ -25,7 +25,7 @@ from scipy.stats import pearsonr
 from rmse import rmse
 import re
 from datetime import datetime
-
+from lmfit import minimize, Parameters
 
 sys.path.append('src')
 import constants as c
@@ -97,6 +97,9 @@ def main(fname, hour=False):
 
     df = df.dropna(subset = ['VPD', 'Rnet', 'Wind', 'Tair', 'Psurf', 'ET'])
 
+    df = df[df.VPD > 1000* 0.05]
+
+
     """
     PM = PenmanMonteith(use_ustar=False)
     # Height from Wilkinson, M., Eaton, E. L., Broadmeadow, M. S. J., and
@@ -119,11 +122,11 @@ def main(fname, hour=False):
 
 
 
-    # screen for bad data
-    df = df[(df['Gs'] > 0.0) & (df['Gs'] < 1.5) & (np.isnan(df['Gs']) == False)]
-    #df = df[(df['Gs'] < 1.5) & (np.isnan(df['Gs']) == False)]
-    df = df[(df['VPDl'] > 0.05* 1000) & (df['VPDl'] < 7.* 1000)  & (np.isnan(df['Gs']) == False)]
-    #df = df[(df['VPDl'] > 0.05* c.PA_TO_KPA)]
+    # screen for bad inverted data
+    df = df[(df['Gs'] > 0.0) & (df['Gs'] < 4.5) & (np.isnan(df['Gs']) == False)]
+    df = df[(df['VPDl'] > 0.05 * c.PA_TO_KPA) & \
+            (df['VPDl'] < 7.* 1000)  & \
+            (np.isnan(df['VPDl']) == False)]
 
     VPDa = df['VPD'] * c.PA_TO_KPA
     VPDl = df['VPDl'] * c.PA_TO_KPA
@@ -131,6 +134,40 @@ def main(fname, hour=False):
     plot_VPD(VPDa, VPDl, site_name)
     plot_gs_vs_D(df['Gs'], VPDa, df['ET'], site_name)
     plot_LE_vs_Tair(df['LE'], df['Tair'], site_name)
+
+    # When parameterizing the model of Eq. 1 in the main text, we
+    # limited the data to those collected when VPD > 1.0 kPa. From Novick sup
+    # remove stable conditions
+    #df = df[(df.VPD/1000. >= 1.) & (df.Wind >= 1.)]
+
+    gs_ref = np.mean(df[(df.VPD * c.PA_TO_KPA > 0.9) & \
+                        (df.VPD * c.PA_TO_KPA < 1.1)].Gs)
+
+    params = Parameters()
+    params.add('m', value=0.5)
+    params.add('gs_ref', value=gs_ref, vary=False)
+
+
+    result = minimize(residual, params, args=(df['VPD']*c.PA_TO_KPA, df['Gs']))
+    for name, par in result.params.items():
+        print('%s = %.4f +/- %.4f ' % (name, par.value, par.stderr))
+
+    m_pred = result.params['m'].value
+
+    plt.plot(np.log(df['VPD']*c.PA_TO_KPA), df['Gs'], "ro")
+    plt.plot(np.log(df['VPD']*c.PA_TO_KPA),
+             np.log(df['VPD']*c.PA_TO_KPA) * m_pred + gs_ref, "k-")
+    plt.show()
+
+def gs_model_lohammar(VPD, m, gs_ref):
+    return -m * np.log(VPD) + gs_ref
+
+def residual(params, VPD, obs):
+    m = params['m'].value
+    gs_ref = params['gs_ref'].value
+    model = gs_model_lohammar(VPD, m, gs_ref)
+
+    return (obs - model)
 
 def plot_gs_vs_D(Gs, VPDa, ET, site_name):
 
