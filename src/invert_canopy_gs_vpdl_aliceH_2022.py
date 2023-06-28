@@ -4,18 +4,6 @@ Estimate the ecosystem conductance (Gs) from inverting the penman-monteith
 against eddy covariance flux data. Finally, make a 1:1 plot of VPD_leaf vs
 VPD_atmospheric
 
-Data from:
-
-CCRC:
-
-/srv/ccrc/LandAU/z3509830/data04/Fluxnet_data/FLUXNET2016/Original_data/Halfhourly_qc_fixed
-/srv/ccrc/LandAU/z3509830/data04/Fluxnet_data/FLUXNET2016/Original_data/Hourly_qc_fixed
-
-Bristol:
-
-/Volumes/storage/FLUXNET2015/data/halfhourly
-/Volumes/storage/FLUXNET2015/data/hourly
-
 That's all folks.
 """
 __author__ = "Martin De Kauwe"
@@ -45,55 +33,152 @@ from penman_monteith import PenmanMonteith
 from estimate_pressure import estimate_pressure
 
 
-def main(site_metadata_fname, hour=False):
+def main(fname, hour=False):
 
-    df_site = pd.read_csv(site_metadata_fname)
+    site_name = "Alice_Holt"
 
+    date_parse = lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S')
+    df = pd.read_csv(fname, index_col='DateTime',
+                     parse_dates=['DateTime'],
+                     date_parser=date_parse)
+    df.index.names = ['date']
 
-    flist = glob.glob(os.path.join(fdir, "*.csv"))
-    #print(flist)
+    """
+    fig, ax1 = plt.subplots()
 
-    # Just use one file for testing
-    flist = ['/Volumes/storage/FLUXNET2015/data/hourly/FLX_AU-Tum_FLUXNET2015_FULLSET_HR_2001-2014_2-4.csv']
+    ax1.plot(df.VPD, "k-")
+    ax1.set_ylabel("VPD (kPa)")
+    ax2 = ax1.twinx()
+    ax2.plot(df.RH, "g-", alpha=0.8)
+    ax2.set_ylim(0, 100)
+    ax2.set_ylabel("RH (%)")
 
-    bad_sites = ["US-PFa", "NO-Blv", "CH-Fru", "JP-SMF", "CH-Oe2", \
-                 "ES-Ln2", "CH-Lae", "JP-MBF"]
+    plt.show()
 
-    for i, fname in enumerate(flist):
+    vpd = df.VPD
+    vpd_mean = vpd.groupby(lambda x: (x.month, x.day)).mean().values
+    vpd_max = vpd.groupby(lambda x: (x.month, x.day)).max().values
+    vpd_min = vpd.groupby(lambda x: (x.month, x.day)).min().values
+    fig, ax1 = plt.subplots()
 
-        site_name = os.path.basename(fname).split(".")[0].split("_")[1].strip()
-
-        if site_name in bad_sites:
-            continue
-
-        d = get_site_info(df_site, fname)
-        df = read_file(fname)
-        (df, d, no_G) = filter_dataframe(df, d, hour)
-
-        if no_G:
-            G = None
-        elif len(df.Qg) > 0:
-            G = df['Qg'] # W m-2
-        else:
-            G = None
-
-
-        PM = PenmanMonteith(use_ustar=True)
-        (df['Gs'],
-         df['VPDl'])  = PM.invert_penman(df['VPD'], df['Wind'], df['Rnet'],
-                                         df['Tair'], df['Psurf'], df['ET'],
-                                         ustar=df["ustar"], G=G)
-
-        # screen for bad data
-        df = df[(df['Gs'] > 0.0) & (np.isnan(df['Gs']) == False)]
-
-        VPDa = df['VPD'] * c.PA_TO_KPA
-        VPDl = df['VPDl'] * c.PA_TO_KPA
-
-        plot_vpd(VPDa, VPDl, site_name)
+    ax1.plot(vpd_mean, ls="-", color="darkgreen")
+    ax1.fill_between(np.arange(len(vpd_min)), vpd_min, vpd_max, color="green", alpha=.5)
+    ax1.set_ylabel("VPD (kPa)")
 
 
-def plot_vpd(VPDa, VPDl, site_name):
+    plt.show()
+    sys.exit()
+    """
+
+    # Convert units ...
+
+    # screen for dew
+    #df = df[df['LE'] > 0.0]
+
+    # W m-2 to kg m-2 s-1
+    lhv = latent_heat_vapourisation(df['Tair'])
+    df.loc[:, 'ET'] = df['LE'] / lhv
+
+
+    # kg m-2 s-1 to mol m-2 s-1
+    conv = c.KG_TO_G * c.G_WATER_TO_MOL_WATER
+    df.loc[:, 'ET'] *= conv
+
+
+
+    (df, no_G) = filter_dataframe(df, hour)
+
+    #plt.plot(df.ET)
+    #plt.show()
+    #sys.exit()
+
+    if no_G:
+        G = None
+
+    df = df.dropna(subset = ['VPD', 'Rnet', 'Wind', 'Tair', 'Psurf', 'ET'])
+
+    """
+    PM = PenmanMonteith(use_ustar=False)
+    # Height from Wilkinson, M., Eaton, E. L., Broadmeadow, M. S. J., and
+    # Morison, J. I. L.: Inter-annual variation of carbon uptake by a
+    # plantation oak woodland in south-eastern England, Biogeosciences, 9,
+    # 5373–5389, https://doi.org/10.5194/bg-9-5373-2012, 2012.
+    (df['Gs'],
+     df['VPDl'])  = PM.invert_penman(df['VPD'].values, df['Wind'].values,
+                                     df['Rnet'].values, df['Tair'].values,
+                                     df['Psurf'].values,
+                                     df['ET'].values, canht=28., G=G)
+    """
+    PM = PenmanMonteith(use_ustar=True)
+    (df['Gs'],
+     df['VPDl'])  = PM.invert_penman(df['VPD'].values, df['Wind'].values,
+                                     df['Rnet'].values, df['Tair'].values,
+                                     df['Psurf'].values,
+                                     df['ET'].values,
+                                     ustar=df["Ustar"], G=G)
+
+
+
+    # screen for bad data
+    df = df[(df['Gs'] > 0.0) & (df['Gs'] < 1.5) & (np.isnan(df['Gs']) == False)]
+    #df = df[(df['Gs'] < 1.5) & (np.isnan(df['Gs']) == False)]
+    df = df[(df['VPDl'] > 0.05* 1000) & (df['VPDl'] < 7.* 1000)  & (np.isnan(df['Gs']) == False)]
+    #df = df[(df['VPDl'] > 0.05* c.PA_TO_KPA)]
+
+    VPDa = df['VPD'] * c.PA_TO_KPA
+    VPDl = df['VPDl'] * c.PA_TO_KPA
+
+    plot_VPD(VPDa, VPDl, site_name)
+    plot_gs_vs_D(df['Gs'], VPDa, df['ET'], site_name)
+    plot_LE_vs_Tair(df['LE'], df['Tair'], site_name)
+
+def plot_gs_vs_D(Gs, VPDa, ET, site_name):
+
+    fig = plt.figure(figsize=(9,6))
+    fig.subplots_adjust(hspace=0.1)
+    fig.subplots_adjust(wspace=0.05)
+    plt.rcParams['text.usetex'] = False
+    plt.rcParams['font.family'] = "sans-serif"
+    plt.rcParams['font.sans-serif'] = "Helvetica"
+    plt.rcParams['axes.labelsize'] = 14
+    plt.rcParams['font.size'] = 14
+    plt.rcParams['legend.fontsize'] = 14
+    plt.rcParams['xtick.labelsize'] = 14
+    plt.rcParams['ytick.labelsize'] = 14
+
+    ax = fig.add_subplot(111)
+    #ax.set_aspect('equal', adjustable='box')
+
+    ln1 = ax.plot(VPDa, Gs, marker="o", ls=" ", color="royalblue", alpha=0.3,
+                  label="G$_{s}$", markersize=7,
+                  markeredgecolor="None")
+
+    ax2 = ax.twinx()
+    ax2.set_ylabel("Evapotranspiration (mmol m$^{-2}$ s$^{-1}$)")
+    ln2 = ax2.plot(VPDa, ET*1000, "go", alpha=0.3, label="ET",
+                   markersize=7, markeredgecolor="None")
+
+    # added these three lines
+    lns = ln1+ln2
+    labs = [l.get_label() for l in lns]
+    ax.legend(lns, labs, numpoints=1, loc="best")
+
+
+    ax.set_zorder(1)  # default zorder is 0 for ax1 and ax2
+    ax.patch.set_visible(False)  # prevents ax1 from hiding ax2
+
+    #ax.set_ylim(0, 6)
+    #ax.set_xlim(0, 6)
+    ax.set_xlabel("VPD (kPa)")
+    ax.set_ylabel("Ecosystem conductance (mol m$^{-2}$ s$^{-1}$)")
+
+
+    odir = "plots"
+    ofname = "%s_gs_vs_VPD_2022.pdf" % (site_name)
+    fig.savefig(os.path.join(odir, ofname),
+                bbox_inches='tight', pad_inches=0.1)
+
+def plot_VPD(VPDa, VPDl, site_name):
 
     fig = plt.figure(figsize=(9,6))
     fig.subplots_adjust(hspace=0.1)
@@ -116,10 +201,10 @@ def plot_vpd(VPDa, VPDl, site_name):
     ax.plot(one2one, one2one, ls='--', color="grey", label="1:1 line")
 
     r, pval = pearsonr(VPDa, VPDl)
-    #print(r, pval)
-    if pval <= 0.05:
-        m,c = np.polyfit(VPDa, VPDl, 1)
-        ax.plot(VPDa, VPDa*m+c, ls="-", c="red")
+    print(r, pval)
+    #if pval <= 0.05:
+    m,c = np.polyfit(VPDa, VPDl, 1)
+    ax.plot(VPDa, VPDa*m+c, ls="-", c="red")
 
 
     ax.set_ylim(0, 6)
@@ -131,9 +216,42 @@ def plot_vpd(VPDa, VPDl, site_name):
     ax.text(3.5, 0.25, 'm = %0.2f; c = %0.2f' % (m, c))
 
     odir = "plots"
-    ofname = "%s.pdf" % (site_name)
+
+    ofname = "%s_2022.pdf" % (site_name)
     fig.savefig(os.path.join(odir, ofname),
                 bbox_inches='tight', pad_inches=0.1)
+
+
+def plot_LE_vs_Tair(LE, Tair, site_name):
+
+    fig = plt.figure(figsize=(9,6))
+    fig.subplots_adjust(hspace=0.1)
+    fig.subplots_adjust(wspace=0.05)
+    plt.rcParams['text.usetex'] = False
+    plt.rcParams['font.family'] = "sans-serif"
+    plt.rcParams['font.sans-serif'] = "Helvetica"
+    plt.rcParams['axes.labelsize'] = 14
+    plt.rcParams['font.size'] = 14
+    plt.rcParams['legend.fontsize'] = 14
+    plt.rcParams['xtick.labelsize'] = 14
+    plt.rcParams['ytick.labelsize'] = 14
+
+    ax = fig.add_subplot(111)
+    #ax.set_aspect('equal', adjustable='box')
+
+    ln1 = ax.plot(Tair, LE, marker="o", ls=" ", alpha=0.5, color="royalblue")
+
+
+    #ax.set_ylim(0, 6)
+    #ax.set_xlim(0, 6)
+    ax.set_ylabel("LE (W m$^{-2}$)")
+    ax.set_xlabel('Temperature ($\degree$C)')
+
+    odir = "plots"
+    ofname = "%s_LE_vs_Tair_2022.pdf" % (site_name)
+    fig.savefig(os.path.join(odir, ofname),
+                bbox_inches='tight', pad_inches=0.1)
+
 
 
 def get_site_info(df_site, fname):
@@ -227,6 +345,7 @@ def read_file(fname):
 
     # Convert units ...
 
+
     # hPa -> Pa
     df.loc[:, 'VPD'] *= c.HPA_TO_KPA * c.KPA_TO_PA
 
@@ -235,12 +354,9 @@ def read_file(fname):
 
     # W m-2 to kg m-2 s-1
     lhv = latent_heat_vapourisation(df['Tair'])
-
     df.loc[:, 'ET'] = df['Qle'] / lhv
 
-    #plt.plot(df.ET)
-    #plt.show()
-    #sys.exit()
+
     # Use EBR value instead - uncomment to output this correction
     #df.loc[:, 'ET'] = df['Qle_cor'] / lhv
 
@@ -272,64 +388,27 @@ def latent_heat_vapourisation(tair):
     """
     return (2.501 - 0.00237 * tair) * 1E06
 
-def filter_dataframe(df, d, hour):
+def filter_dataframe(df, hour):
     """
     Filter data only using QA=0 (obs) and QA=1 (good)
     """
     no_G = False
 
-    df_p = df.copy()
-    total_length = len(df_p)
-    df_y = df_p.groupby(df_p.index.year).sum()
-
-    d['ppt'] = np.mean(df_y.Precip.values)
-
-    # filter daylight hours, good LE data, GPP, CO2
+    # filter daylight hours
     #
     # If we have no ground heat flux, just use Rn
-    if len(df[(df['Qg_qc'] == 0) | (df['Qg_qc'] == 1)]) == 0:
-        df = df[(df.index.hour >= 7) &
-                (df.index.hour <= 18) &
-                ( (df['Qle_qc'] == 0) | (df['Qle_qc'] == 1) ) &
-                (df['ET'] > 0.01 / 1000.) & # check in mmol, but units are mol
-                (df['VPD'] > 0.05)]
-        no_G = True
-    else:
-        df = df[(df.index.hour >= 7) &
-                (df.index.hour <= 18) &
-                ( (df['Qle_qc'] == 0) | (df['Qle_qc'] == 1) ) &
-                ( (df['Qg_qc'] == 0) | (df['Qg_qc'] == 1) ) &
-                (df['ET'] > 0.01 / 1000.) & # check in mmol, but units are mol
-                (df['VPD'] > 0.05)]
+    no_G = True
 
-        # Turn on if EB correcting - i.e. Fig A2
-        # Correct based on method 4 from Wohlfahrt et al. Agricultural and
-        # Forest Meteorology 149
-        #if top > 0.0:
-        #    corection_factor = bot/top
-        #    df.Qle *= corection_factor
-        #    df.Qh *= corection_factor
-        #
-        #    df.loc[:, 'Qle'] = df['Qle'] * corection_factor
-        #    df.loc[:, 'Qh'] = df['Qh'] * corection_factor
-        #
-        #    lhv = self.latent_heat_vapourisation(df['Tair'])
-        #    df.loc[:, 'ET'] = df['Qle'] / lhv
-        #    df.loc[:, 'ET'] = df['Qle'] / lhv
-        #
-        #
-        #    # kg m-2 s-1 to mol m-2 s-1
-        #    conv = c.KG_TO_G * c.G_WATER_TO_MOL_WATER
-        #    df.loc[:, 'ET'] = df['ET'].copy() * conv
-        #
-        #
-        #    if bot > 0.0:
-        #        d['EBR'] = top / bot
-        #else:
-        #    d['EBR'] = -999.9
 
+
+    df = df[(df.index.hour >= 7) &
+            (df.index.hour <= 18) &
+            (df['ET'] > 0.01 / 1000.) &  # check in mmol, but units are mol
+            (df['VPD']/1000 > 0.05)]
+
+    #"""
     # Filter events after rain ...
-    idx = df[df.Precip > 0.0].index.tolist()
+    idx = df[df.Rainf > 0.0].index.tolist()
 
     if hour:
         # hour gap i.e. Tumba
@@ -340,15 +419,8 @@ def filter_dataframe(df, d, hour):
                 new_idx = rain_idx + dt.timedelta(minutes=60)
                 bad_dates.append(new_idx)
                 rain_idx = new_idx
-
-        df2 = df.copy()
-        df2.loc[:, 'GPP_umol_m2_s'] = df2.loc[:, 'GPP'] #* c.MOL_C_TO_GRAMS_C * c.UMOL_TO_MOL
-        df2.loc[:, 'GPP'] *= c.MOL_C_TO_GRAMS_C * c.UMOL_TO_MOL * \
-                             c.SEC_TO_HR
-
-
-        df = df2
     else:
+
 
         # 30 min gap
         bad_dates = []
@@ -359,28 +431,16 @@ def filter_dataframe(df, d, hour):
                 bad_dates.append(new_idx)
                 rain_idx = new_idx
 
-        df2 = df.copy()
-        df2.loc[:, 'GPP_umol_m2_s'] = df2.loc[:, 'GPP'] #* c.MOL_C_TO_GRAMS_C * c.UMOL_TO_MOL
-        df2.loc[:, 'GPP'] *= c.MOL_C_TO_GRAMS_C * c.UMOL_TO_MOL * \
-                            c.SEC_TO_HLFHR
-
-
-        df = df2
-
     # There will be duplicate dates most likely so remove these.
     bad_dates = np.unique(bad_dates)
 
     # remove rain days...
     df = df[~df.index.isin(bad_dates)]
+    #"""
 
-    return (df, d, no_G)
+    return (df, no_G)
 
 if __name__ == "__main__":
 
-
-    site_metadata_fname = "data/anna_meta/site_metadata.csv"
-
-    fdir="/Volumes/storage/FLUXNET2015/data/hourly"
-    main(site_metadata_fname, hour=True)
-    #fdir="Volumes/storage/FLUXNET2015/data/halfhourly"
-    #main(hour=False)
+    fname = "/Users/xj21307/research/Alice_Holt/data/alice_holt_met_data_2022.csv"
+    main(fname, hour=False)

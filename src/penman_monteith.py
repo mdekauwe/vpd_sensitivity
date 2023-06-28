@@ -169,7 +169,8 @@ class PenmanMonteith(object):
         arg3 = ga * self.MASS_AIR * self.CP * vpd
 
         Gs = arg1 / (arg2 + arg3)
-
+        Gs = np.where(Gs < 0.0001, 0.0001, Gs)
+        
         # inger ecosystem-scale, VPD_l (Pa)
         VPDl = (gamma * lambda_E) / (self.MASS_AIR * self.CP * Gs)
 
