@@ -71,6 +71,7 @@ def main(fname, hour=False):
     """
 
     # Convert units ...
+    df.loc[:, 'Tair'] -= 273.15
 
     # screen for dew
     #df = df[df['LE'] > 0.0]
@@ -84,19 +85,11 @@ def main(fname, hour=False):
     conv = c.KG_TO_G * c.G_WATER_TO_MOL_WATER
     df.loc[:, 'ET'] *= conv
 
-
-
     (df, no_G) = filter_dataframe(df, hour)
-
-    #plt.plot(df.ET)
-    #plt.show()
-    #sys.exit()
-
     if no_G:
         G = None
 
     df = df.dropna(subset = ['VPD', 'Rnet', 'Wind', 'Tair', 'Psurf', 'ET'])
-
     df = df[df.VPD > 1000* 0.05]
 
 
@@ -154,10 +147,10 @@ def main(fname, hour=False):
 
     m_pred = result.params['m'].value
 
-    plt.plot(np.log(df['VPD']*c.PA_TO_KPA), df['Gs'], "ro")
-    plt.plot(np.log(df['VPD']*c.PA_TO_KPA),
-             np.log(df['VPD']*c.PA_TO_KPA) * m_pred + gs_ref, "k-")
-    plt.show()
+    #plt.plot(np.log(df['VPD']*c.PA_TO_KPA), df['Gs'], "ro")
+    #plt.plot(np.log(df['VPD']*c.PA_TO_KPA),
+    #         np.log(df['VPD']*c.PA_TO_KPA) * m_pred + gs_ref, "k-")
+    #plt.show()
 
 def gs_model_lohammar(VPD, m, gs_ref):
     return -m * np.log(VPD) + gs_ref
